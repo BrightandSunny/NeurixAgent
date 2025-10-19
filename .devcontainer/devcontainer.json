@@ -1,0 +1,9 @@
+{
+  "name": "NeurixAgent v2",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:18",
+  "features": { "ghcr.io/devcontainers/features/github-cli:1": {} },
+  "postCreateCommand": "corepack enable && (yarn --version || npm i -g yarn) && (yarn install || npm i)",
+  "customizations": {
+    "vscode": { "extensions": ["dbaeumer.vscode-eslint","esbenp.prettier-vscode","ms-vscode.vscode-typescript-next"] }
+  }
+}

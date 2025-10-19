@@ -1,0 +1,1161 @@
+diff --git a/server/NEW_DIFF_DROPINS.md b/server/NEW_DIFF_DROPINS.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..e963dea47275bf60897430642229bf7ffe30fe3d
+--- /dev/null
++++ b/server/NEW_DIFF_DROPINS.md
+@@ -0,0 +1,1152 @@
++# Drop-in Replacements for Stage-1 "New Diff" Files
++
++The following listings provide exact Stage-1 drop-in replacements for every file that previously appeared under "New Diff". Copy each block verbatim into the indicated path under `server/` or `previewer/`.
++
++
++> NOTE: Paths are relative to the repository root `D:\\NeurixPlay`.
++
++The direct replacements are provided for the following 22 files:
++
++1. `package.json`
++2. `previewer/public/preview/main.m3u8`
++3. `server/package.json`
++4. `server/tsconfig.json`
++5. `server/src/amcp/index.ts`
++6. `server/src/amcpClient.ts`
++7. `server/src/config/env.ts`
++8. `server/src/http/mw/corsDevOnly.ts`
++9. `server/src/http/mw/previewCors.ts`
++10. `server/src/http/mw/safeJson.ts`
++11. `server/src/http/routes/caspar.ts`
++12. `server/src/http/routes/meta.ts`
++13. `server/src/index.ts`
++14. `server/src/logger.ts`
++15. `server/src/osc/ingest.ts`
++16. `server/src/oscBridge.ts`
++17. `server/src/types/osc.d.ts`
++18. `server/src/restApi.ts`
++19. `server/src/ws/statusServer.ts`
++20. `server/src/wsHub.ts`
++21. `server/tests/adr/adr.sentinel.spec.ts`
++22. `server/tests/unit/oscBridge.spec.ts`
++
++> If you only need a subset, copy the matching section(s) below verbatim.
++
++## `package.json`
++```json
++{
++  "name": "neurixplay",
++  "version": "0.0.0",
++  "private": true,
++  "scripts": {
++    "build": "npm run build --prefix server",
++    "test:sentinel": "npm run test:sentinel --prefix server"
++  }
++}
++```
++
++## `previewer/public/preview/main.m3u8`
++```m3u
++#EXTM3U
++#EXT-X-VERSION:3
++#EXT-X-TARGETDURATION:4
++#EXT-X-MEDIA-SEQUENCE:0
++```
++
++## `server/package.json`
++```json
++{
++  "name": "neurixplay-playout-server",
++  "version": "0.1.0",
++  "private": true,
++  "type": "module",
++  "scripts": {
++    "dev": "tsx src/index.ts",
++    "start": "node dist/index.js",
++    "build": "tsc -p tsconfig.json",
++    "test:sentinel": "tsx tests/adr/adr.sentinel.spec.ts && tsx tests/unit/oscBridge.spec.ts",
++    "guard:adr": "pwsh -NoLogo -NoProfile -ExecutionPolicy Bypass -File ./adr-guard.ps1",
++    "dev:stub": "node dev-stubs/server-smoke.js"
++  },
++  "dependencies": {
++    "dotenv": "^16.4.5",
++    "express": "^4.19.2",
++    "ws": "^8.17.1",
++    "osc": "^2.4.2",
++    "cors": "^2.8.5",
++    "pino": "^9.2.0",
++    "body-parser": "^1.20.2",
++    "express-rate-limit": "^7.4.0"
++  },
++  "devDependencies": {
++    "tsx": "^4.19.0",
++    "typescript": "^5.4.5",
++    "@types/express": "^4.17.21",
++    "@types/ws": "^8.5.10",
++    "@types/cors": "^2.8.17",
++    "@types/express-rate-limit": "^5.1.0"
++  },
++  "engines": {
++    "node": ">=18.18 <21"
++  }
++}
++```
++
++## `server/tsconfig.json`
++```json
++{
++  "compilerOptions": {
++    "target": "ES2022",
++    "module": "ES2022",
++    "moduleResolution": "Bundler",
++    "outDir": "dist",
++    "rootDir": "src",
++    "strict": true,
++    "noImplicitAny": true,
++    "strictNullChecks": true,
++    "forceConsistentCasingInFileNames": true,
++    "skipLibCheck": true
++  },
++  "include": [
++    "src/index.ts",
++    "src/amcp/**/*.ts",
++    "src/amcpClient.ts",
++    "src/config/**/*.ts",
++    "src/http/**/*.ts",
++    "src/logger.ts",
++    "src/osc/**/*.ts",
++    "src/oscBridge.ts",
++    "src/restApi.ts",
++    "src/types/**/*.d.ts",
++    "src/ws/**/*.ts",
++    "src/wsHub.ts"
++  ],
++  "exclude": [
++    "src/deviceRunner.ts",
++    "src/resolveService.ts",
++    "src/stub/**/*"
++  ]
++}
++```
++
++## `server/src/amcp/index.ts`
++```ts
++import { AmcpClient } from "../amcpClient.js";
++import { cfg } from "../config/env.js";
++import { log } from "../logger.js";
++
++const amcpClient = new AmcpClient(cfg.caspar.host, cfg.caspar.amcpPort);
++
++log.debug({ host: cfg.caspar.host, port: cfg.caspar.amcpPort }, "AMCP client initialised");
++
++export function getAmcpClient() {
++  return amcpClient;
++}
++
++export function disposeAmcpClient() {
++  amcpClient.dispose();
++}
++```
++
++## `server/src/amcpClient.ts`
++```ts
++import net from "node:net";
++
++/**
++ * AMCP client with a single persistent TCP socket and a tiny command queue.
++ * Resolves on the first CRLF-terminated reply line (e.g. "202 PLAY OK").
++ */
++export class AmcpClient {
++  private socket: net.Socket | null = null;
++  private connecting = false;
++  private queue: Array<{ cmd: string; resolve: (s: string) => void; reject: (e: any) => void }> = [];
++  private busy = false;
++  private disposed = false;
++
++  constructor(private host: string, private port: number, private timeoutMs = 2000) {}
++
++  private async getSocket(): Promise<net.Socket> {
++    if (this.disposed) {
++      throw new Error("AMCP client disposed");
++    }
++    if (this.socket && !this.socket.destroyed) return this.socket;
++    if (this.connecting) {
++      await new Promise((r) => setTimeout(r, 25));
++      return this.getSocket();
++    }
++    this.connecting = true;
++    this.socket = net.createConnection({ host: this.host, port: this.port });
++    await new Promise<void>((res, rej) => {
++      const onErr = (e: Error) => rej(e);
++      this.socket!.once("error", onErr);
++      this.socket!.once("connect", () => {
++        this.socket!.off("error", onErr);
++        res();
++      });
++    });
++    this.connecting = false;
++    return this.socket!;
++  }
++
++  /** Enqueue and return the reply line */
++  async send(command: string): Promise<string> {
++    if (this.disposed) {
++      return Promise.reject(new Error("AMCP client disposed"));
++    }
++    return new Promise<string>(async (resolve, reject) => {
++      this.queue.push({ cmd: command, resolve, reject });
++      if (!this.busy) {
++        this.busy = true;
++        try {
++          while (this.queue.length) {
++            const item = this.queue.shift()!;
++            try {
++              const line = await this.dispatch(item.cmd);
++              item.resolve(line);
++            } catch (e) {
++              item.reject(e);
++            }
++          }
++        } finally {
++          this.busy = false;
++        }
++      }
++    });
++  }
++
++  private async dispatch(command: string): Promise<string> {
++    const sock = await this.getSocket();
++    const payload = `${command}\r\n`;
++    let buffer = "";
++    return new Promise<string>((res, rej) => {
++      const timeout = setTimeout(() => {
++        cleanup();
++        rej(new Error("AMCP timeout"));
++      }, this.timeoutMs);
++
++      const onData = (b: Buffer) => {
++        buffer += b.toString("utf8");
++        const i = buffer.indexOf("\r\n");
++        if (i !== -1) {
++          const line = buffer.slice(0, i); // first reply line is enough for OK/ERR
++          cleanup();
++          res(line);
++        }
++      };
++      const onErr = (e: Error) => {
++        cleanup();
++        rej(e);
++      };
++      const cleanup = () => {
++        clearTimeout(timeout);
++        sock.off("data", onData);
++        sock.off("error", onErr);
++      };
++      sock.on("data", onData);
++      sock.once("error", onErr);
++      sock.write(payload);
++    });
++  }
++
++  dispose() {
++    this.disposed = true;
++    if (this.socket && !this.socket.destroyed) {
++      this.socket.destroy();
++    }
++    this.socket = null;
++    this.connecting = false;
++    while (this.queue.length) {
++      const item = this.queue.shift();
++      if (item) item.reject(new Error("AMCP client disposed"));
++    }
++    this.busy = false;
++  }
++}
++```
++
++## `server/src/config/env.ts`
++```ts
++import { config as loadEnv } from "dotenv";
++
++loadEnv();
++
++function parsePort(value: string | undefined, fallback: number): number {
++  const parsed = Number.parseInt(value ?? "", 10);
++  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
++}
++
++export interface PreviewConfig {
++  hlsDir?: string;
++}
++
++export interface CasparConfig {
++  host: string;
++  amcpPort: number;
++}
++
++export interface OscConfig {
++  listenPort: number;
++}
++
++export interface Config {
++  env: string;
++  logLevel: string;
++  httpPort: number;
++  hlsDir?: string;
++  preview: PreviewConfig;
++  caspar: CasparConfig;
++  osc: OscConfig;
++}
++
++const env = process.env.NODE_ENV?.trim() || "development";
++const logLevel = process.env.LOG_LEVEL?.trim() || "info";
++
++const cfg: Config = {
++  env,
++  logLevel,
++  httpPort: parsePort(process.env.HTTP_PORT ?? process.env.PORT, 3000),
++  hlsDir: process.env.HLS_DIR_ABS ?? process.env.HLS_DIR ?? undefined,
++  preview: {
++    hlsDir: process.env.PREVIEW_HLS_DIR ?? undefined,
++  },
++  caspar: {
++    host: process.env.AMCP_HOST?.trim() || "127.0.0.1",
++    amcpPort: parsePort(process.env.AMCP_PORT, 5250),
++  },
++  osc: {
++    listenPort: parsePort(process.env.OSC_PORT, 6250),
++  },
++};
++
++export { cfg };
++```
++
++## `server/src/http/mw/corsDevOnly.ts`
++```ts
++import type { RequestHandler } from "express";
++import cors from "cors";
++import { cfg } from "../../config/env.js";
++
++const corsMiddleware = cors({ origin: true, credentials: true });
++
++export const corsDevOnly: RequestHandler = (req, res, next) => {
++  if (cfg.env === "development" || cfg.env === "dev" || cfg.env === "test") {
++    corsMiddleware(req, res, next);
++    return;
++  }
++  next();
++};
++```
++
++## `server/src/http/mw/previewCors.ts`
++```ts
++import cors from "cors";
++import path from "node:path";
++import type { RequestHandler, Response } from "express";
++
++export const previewCors: RequestHandler = cors({ origin: true, credentials: false });
++
++export function setHlsHeaders(res: Response, filePath: string) {
++  const ext = path.extname(filePath).toLowerCase();
++  if (ext === ".m3u8") {
++    res.setHeader("content-type", "application/vnd.apple.mpegurl");
++    res.setHeader("cache-control", "no-cache");
++  } else if (ext === ".ts") {
++    res.setHeader("content-type", "video/mp2t");
++    res.setHeader("cache-control", "public, max-age=1");
++  }
++}
++```
++
++## `server/src/http/mw/safeJson.ts`
++```ts
++import express from "express";
++import type { NextFunction, Request, Response } from "express";
++
++const jsonParser = express.json({ limit: "1mb" });
++
++export function safeJson(req: Request, res: Response, next: NextFunction) {
++  jsonParser(req, res, (err) => {
++    if (err) {
++      res.status(400).json({ ok: false, error: "Invalid JSON payload" });
++      return;
++    }
++    next();
++  });
++}
++```
++
++## `server/src/http/routes/caspar.ts`
++```ts
++import { createCasparRouter } from "../../restApi.js";
++import { getAmcpClient } from "../../amcp/index.js";
++import { log } from "../../logger.js";
++
++const router = createCasparRouter(getAmcpClient(), log);
++
++export default router;
++```
++
++## `server/src/http/routes/meta.ts`
++```ts
++import { Router } from "express";
++
++const router = Router();
++
++router.get("/ping", (_req, res) => {
++  res.json({ ok: true });
++});
++
++export default router;
++```
++
++## `server/src/index.ts`
++```ts
++import express from "express";
++import bodyParser from "body-parser";
++import http from "node:http";
++import fs from "node:fs";
++import path from "node:path";
++
++import { cfg } from "./config/env.js";
++import { startOscIngest, stopOscIngest } from "./osc/ingest.js";
++
++import { corsDevOnly } from "./http/mw/corsDevOnly.js";
++import { safeJson } from "./http/mw/safeJson.js";
++import casparRoutes from "./http/routes/caspar.js";
++import metaRoutes from "./http/routes/meta.js";
++import { startStatusWsServer, stopStatusWsServer } from "./ws/statusServer.js";
++import { previewCors, setHlsHeaders } from "./http/mw/previewCors.js";
++import { disposeAmcpClient } from "./amcp/index.js";
++
++/* ─────────────────────────── Helpers ─────────────────────────── */
++
++function pickHlsDir(): { root: string; source: string } {
++  const candidates = [
++    { v: cfg.hlsDir, label: "cfg.hlsDir" },
++    { v: cfg.preview.hlsDir, label: "cfg.preview.hlsDir" },
++    { v: process.env.HLS_DIR, label: "process.env.HLS_DIR" },
++  ];
++
++  for (const candidate of candidates) {
++    const cleaned = String(candidate.v ?? "")
++      .trim()
++      .replace(/^['"]|['"]$/g, "");
++    if (cleaned) {
++      return { root: path.resolve(cleaned), source: candidate.label };
++    }
++  }
++  throw new Error("[HLS] No HLS directory configured. Set cfg.hlsDir, cfg.preview.hlsDir, or HLS_DIR (e.g. D:\\NeurixPlay\\previewer\\public\\preview).");
++}
++
++function ensureDir(targetPath: string) {
++  try {
++    if (!fs.existsSync(targetPath)) {
++      fs.mkdirSync(targetPath, { recursive: true });
++    }
++  } catch (error) {
++    console.warn(`[HLS] Could not create directory: ${targetPath}`, error);
++  }
++}
++
++/* ─────────────────────────── App ─────────────────────────── */
++
++const app = express();
++app.use(bodyParser.json());
++app.use(corsDevOnly);
++app.use(safeJson);
++
++/** Resolve + validate HLS root once on startup */
++const { root: HLS_ROOT, source: HLS_SRC } = pickHlsDir();
++ensureDir(HLS_ROOT);
++
++/** Serve the HLS preview (manifest + segments) */
++app.use(
++  "/preview",
++  previewCors,
++  express.static(HLS_ROOT, {
++    fallthrough: false,
++    setHeaders: (res, filePath) => setHlsHeaders(res, filePath),
++  }),
++);
++
++/** Meta + control routes */
++app.use("/api", metaRoutes);
++app.use("/api/caspar", casparRoutes);
++
++/* ───────────────────── HTTP server + WebSocket ───────────────────── */
++
++const server = http.createServer(app);
++startStatusWsServer(server);
++
++/* ────────────────────────── Boot & logging ───────────────────────── */
++
++function onListening(port: number) {
++  console.log("[CONFIG] using", {
++    httpPort: port,
++    caspar: { host: cfg.caspar.host, amcpPort: cfg.caspar.amcpPort },
++    osc: { listenPort: cfg.osc.listenPort },
++    hlsDir: HLS_ROOT,
++    hlsFrom: HLS_SRC,
++    logLevel: cfg.logLevel,
++  });
++
++  console.log(`[HTTP] listening on :${port}`);
++  console.log(`[HLS]  serving preview dir: "${HLS_ROOT}"`);
++  console.log(`[OSC]  listening on udp://0.0.0.0:${cfg.osc.listenPort}`);
++
++  startOscIngest();
++}
++
++function onError(err: NodeJS.ErrnoException | null, port: number) {
++  if (err?.code === "EADDRINUSE") {
++    const fallback = port + 1;
++    console.warn(`[HTTP] port ${port} in use; trying ${fallback} …`);
++    server.removeAllListeners("error");
++    server.listen(fallback, () => onListening(fallback));
++    server.on("error", (error) => {
++      console.error("[HTTP] failed to bind fallback port", error);
++      process.exit(1);
++    });
++    return;
++  }
++  console.error("[HTTP] fatal listen error:", err);
++  process.exit(1);
++}
++
++/* ─────────────────────────────────────────────────────────────────── */
++
++server.listen(cfg.httpPort, () => onListening(cfg.httpPort));
++server.on("error", (error) => onError(error as NodeJS.ErrnoException, cfg.httpPort));
++
++function handleShutdown(signal: NodeJS.Signals) {
++  console.log(`[SHUTDOWN] received ${signal}, closing services`);
++  stopOscIngest();
++  void stopStatusWsServer().finally(() => {
++    disposeAmcpClient();
++    server.close(() => process.exit(0));
++  });
++}
++
++process.on("SIGINT", handleShutdown);
++process.on("SIGTERM", handleShutdown);
++
++export {};
++```
++
++## `server/src/logger.ts`
++```ts
++import pino from "pino";
++import { cfg } from "./config/env.js";
++
++export const log = pino({
++  name: "neurixplay-server",
++  level: cfg.logLevel,
++});
++```
++
++## `server/src/osc/ingest.ts`
++```ts
++import { OscBridge } from "../oscBridge.js";
++import { cfg } from "../config/env.js";
++import { publishStatus } from "../ws/statusServer.js";
++import { log } from "../logger.js";
++
++let bridge: OscBridge | null = null;
++
++export function startOscIngest() {
++  if (!bridge) {
++    bridge = new OscBridge(cfg.osc.listenPort);
++    bridge.on("status", (event) => publishStatus(event));
++    bridge.start();
++    log.info({ port: cfg.osc.listenPort }, "OSC ingest started");
++  }
++  return bridge;
++}
++
++export function stopOscIngest() {
++  if (bridge) {
++    bridge.removeAllListeners("status");
++    bridge.stop();
++    log.info({ port: cfg.osc.listenPort }, "OSC ingest stopped");
++    bridge = null;
++  }
++}
++```
++
++## `server/src/oscBridge.ts`
++```ts
++import OSC from "osc";
++import { EventEmitter } from "node:events";
++
++type OscUdpPort = {
++  open(): void;
++  close(): void;
++  on(event: string, handler: (message: unknown) => void): void;
++  removeAllListeners?(event?: string): void;
++};
++
++export interface StatusEvent {
++  channel: number;
++  layer: number;
++  clipName?: string;
++  timecode?: string;
++  duration?: string;
++  frame?: number;
++  fps?: number;
++  onAir: boolean;
++}
++
++type StatusState = StatusEvent;
++
++type OscArg = unknown | { value: unknown };
++
++type OscMessage = {
++  address?: string;
++  args?: OscArg[];
++};
++
++function parseChannelLayer(address: string | undefined): { channel: number; layer: number } | null {
++  if (!address) return null;
++  const parts = address.split("/").filter(Boolean);
++  if (parts.length < 2) return null;
++  const channel = Number.parseInt(parts[1] ?? "1", 10) || 1;
++  const layerIndex = parts.lastIndexOf("layer");
++  const layer = layerIndex >= 0 ? Number.parseInt(parts[layerIndex + 1] ?? "1", 10) || 1 : 1;
++  return { channel, layer };
++}
++
++function unwrapArg(value: OscArg | undefined): unknown {
++  if (value && typeof value === "object" && "value" in value) {
++    return (value as { value: unknown }).value;
++  }
++  return value;
++}
++
++function asString(value: OscArg | undefined): string | undefined {
++  const raw = unwrapArg(value);
++  if (raw === undefined || raw === null) return undefined;
++  const str = String(raw).trim();
++  return str.length ? str : undefined;
++}
++
++function asNumber(value: OscArg | undefined): number | undefined {
++  const raw = unwrapArg(value);
++  const num = typeof raw === "number" ? raw : Number(raw);
++  return Number.isFinite(num) ? num : undefined;
++}
++
++function ensureState(
++  state: Map<string, StatusState>,
++  channel: number,
++  layer: number,
++): StatusState {
++  const key = `${channel}:${layer}`;
++  let current = state.get(key);
++  if (!current) {
++    current = { channel, layer, onAir: false };
++    state.set(key, current);
++  }
++  return current;
++}
++
++export function applyOscUpdate(
++  state: Map<string, StatusState>,
++  message: OscMessage,
++): StatusEvent | null {
++  const { address, args = [] } = message;
++  const parsed = parseChannelLayer(address);
++  if (!parsed) return null;
++  const { channel, layer } = parsed;
++  const current = ensureState(state, channel, layer);
++
++  let updated = false;
++
++  if (address?.endsWith("/file/name")) {
++    const clipName = asString(args[0]);
++    if (clipName !== undefined && clipName !== current.clipName) {
++      current.clipName = clipName;
++      updated = true;
++    }
++    if (!current.onAir) {
++      current.onAir = true;
++      updated = true;
++    }
++  } else if (address?.endsWith("/file/time")) {
++    const timecode = asString(args[0]);
++    const fps = asNumber(args[1]);
++    if (timecode !== undefined && timecode !== current.timecode) {
++      current.timecode = timecode;
++      updated = true;
++    }
++    if (fps !== undefined && fps !== current.fps) {
++      current.fps = fps;
++      updated = true;
++    }
++    if (!current.onAir) {
++      current.onAir = true;
++      updated = true;
++    }
++  } else if (address?.endsWith("/file/duration")) {
++    const duration = asString(args[0]);
++    if (duration !== undefined && duration !== current.duration) {
++      current.duration = duration;
++      updated = true;
++    }
++    if (!current.onAir) {
++      current.onAir = true;
++      updated = true;
++    }
++  } else if (address?.endsWith("/file/frame")) {
++    const frame = asNumber(args[0]);
++    if (frame !== undefined && frame !== current.frame) {
++      current.frame = frame;
++      updated = true;
++    }
++  } else if (address?.endsWith("/file/fps")) {
++    const fps = asNumber(args[0]);
++    if (fps !== undefined && fps !== current.fps) {
++      current.fps = fps;
++      updated = true;
++    }
++  } else if (address?.endsWith("/foreground")) {
++    const onAir = Boolean(args[0]);
++    if (onAir !== current.onAir) {
++      current.onAir = onAir;
++      updated = true;
++    }
++  }
++
++  if (!updated) return null;
++
++  return { ...current };
++}
++
++export class OscBridge extends EventEmitter {
++  private udpPort: OscUdpPort;
++  private readonly state = new Map<string, StatusState>();
++
++  constructor(listenPort: number) {
++    super();
++    this.udpPort = new (OSC as unknown as {
++      UDPPort: new (options: { localAddress: string; localPort: number }) => OscUdpPort;
++    }).UDPPort({ localAddress: "0.0.0.0", localPort: listenPort });
++    this.udpPort.on("message", (m) => this.onOsc(m as OscMessage));
++  }
++  start() {
++    this.udpPort.open();
++  }
++  stop() {
++    if (this.udpPort) {
++      if (typeof this.udpPort.removeAllListeners === "function") {
++        this.udpPort.removeAllListeners("message");
++      }
++      this.udpPort.close();
++    }
++    this.state.clear();
++  }
++  private onOsc(msg: OscMessage) {
++    const updated = applyOscUpdate(this.state, msg);
++    if (updated) this.emit("status", updated);
++  }
++}
++```
++
++## `server/src/types/osc.d.ts`
++```ts
++declare module "osc" {
++  export interface OscUdpPortOptions {
++    localAddress: string;
++    localPort: number;
++  }
++
++  export class UDPPort {
++    constructor(options: OscUdpPortOptions);
++    open(): void;
++    close(): void;
++    on(event: string, handler: (message: unknown) => void): void;
++    removeAllListeners(event?: string): void;
++  }
++
++  const osc: {
++    UDPPort: typeof UDPPort;
++  };
++
++  export default osc;
++}
++```
++
++## `server/src/restApi.ts`
++```ts
++import { Router, type Request, type Response } from "express";
++import type { Logger } from "pino";
++import type { AmcpClient } from "./amcpClient.js";
++
++interface CommandLogger {
++  info: (...args: any[]) => void;
++  warn: (...args: any[]) => void;
++  error: (...args: any[]) => void;
++}
++
++const noopLogger: CommandLogger = {
++  info: () => {},
++  warn: () => {},
++  error: () => {},
++};
++
++const DEFAULT_CHANNEL = 1;
++const DEFAULT_LAYER = 1;
++
++function toPositiveInt(value: unknown, fallback: number): number {
++  const num = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
++  return Number.isFinite(num) && num > 0 ? Math.floor(num) : fallback;
++}
++
++function sanitizeClip(raw: unknown): string | null {
++  if (typeof raw !== "string") return null;
++  const clip = raw.trim();
++  return clip.length > 0 ? clip : null;
++}
++
++function escapeClip(clip: string): string {
++  return clip.replace(/"/g, '\\"');
++}
++
++function formatTarget(channel: number, layer: number): string {
++  return `${channel}-${layer}`;
++}
++
++function parseAddress(input: { channel?: unknown; layer?: unknown } | undefined) {
++  return {
++    channel: toPositiveInt(input?.channel, DEFAULT_CHANNEL),
++    layer: toPositiveInt(input?.layer, DEFAULT_LAYER),
++  };
++}
++
++async function dispatch(
++  res: Response,
++  action: string,
++  exec: () => Promise<string>,
++  logger: CommandLogger,
++  context: Record<string, unknown>,
++) {
++  try {
++    const resp = await exec();
++    logger.info({ action, ...context, resp }, "AMCP command dispatched");
++    res.status(200).json({ ok: true, resp });
++  } catch (error) {
++    const message = error instanceof Error ? error.message : String(error);
++    logger.error({ action, ...context, err: error }, "AMCP command failed");
++    res.status(502).json({ ok: false, error: message });
++  }
++}
++
++export function createCasparRouter(
++  amcp: Pick<AmcpClient, "send">,
++  logger?: Pick<Logger, "info" | "warn" | "error">,
++) {
++  const log: CommandLogger = logger ?? noopLogger;
++  const router = Router();
++
++  router.post("/play", async (req: Request, res: Response) => {
++    const clip = sanitizeClip(req.body?.clip);
++    if (!clip) {
++      res.status(400).json({ ok: false, error: "clip is required" });
++      return;
++    }
++    const { channel, layer } = parseAddress(req.body);
++    const target = formatTarget(channel, layer);
++    await dispatch(
++      res,
++      "play",
++      () => amcp.send(`PLAY ${target} "${escapeClip(clip)}"`),
++      log,
++      { clip, channel, layer },
++    );
++  });
++
++  router.post("/stop", async (req: Request, res: Response) => {
++    const { channel, layer } = parseAddress(req.body);
++    const target = formatTarget(channel, layer);
++    await dispatch(res, "stop", () => amcp.send(`STOP ${target}`), log, { channel, layer });
++  });
++
++  router.post("/loadbg", async (req: Request, res: Response) => {
++    const clip = sanitizeClip(req.body?.clip);
++    if (!clip) {
++      res.status(400).json({ ok: false, error: "clip is required" });
++      return;
++    }
++    const { channel, layer } = parseAddress(req.body);
++    const loop = Boolean(req.body?.loop);
++    const target = formatTarget(channel, layer);
++    const loopSuffix = loop ? " LOOP" : "";
++    await dispatch(
++      res,
++      "loadbg",
++      () => amcp.send(`LOADBG ${target} "${escapeClip(clip)}"${loopSuffix}`),
++      log,
++      { clip, channel, layer, loop },
++    );
++  });
++
++  return router;
++}
++
++export type { CommandLogger };
++```
++
++## `server/src/ws/statusServer.ts`
++```ts
++import type { Server } from "node:http";
++import { WsHub } from "../wsHub.js";
++import type { StatusEvent } from "../oscBridge.js";
++
++let hub: WsHub | null = null;
++
++export function startStatusWsServer(server: Server) {
++  if (!hub) {
++    hub = new WsHub(server);
++  }
++  return hub;
++}
++
++export async function stopStatusWsServer() {
++  if (hub) {
++    await hub.close();
++    hub = null;
++  }
++}
++
++export function publishStatus(event: StatusEvent) {
++  hub?.broadcast(event);
++}
++```
++
++## `server/src/wsHub.ts`
++```ts
++import { WebSocketServer } from "ws";
++import type { StatusEvent } from "./oscBridge.js";
++
++export class WsHub {
++  private wss: WebSocketServer;
++  constructor(server: import("http").Server) {
++    this.wss = new WebSocketServer({ server, path: "/ws/status" });
++  }
++  broadcast(ev: StatusEvent) {
++    const data = JSON.stringify({ type: "status", payload: ev });
++    this.wss.clients.forEach((c) => {
++      if (c.readyState === 1) c.send(data);
++    });
++  }
++  async close(): Promise<void> {
++    await new Promise<void>((resolve, reject) => {
++      this.wss.close((err) => {
++        if (err) {
++          reject(err);
++          return;
++        }
++        resolve();
++      });
++    });
++  }
++}
++```
++
++## `server/tests/adr/adr.sentinel.spec.ts`
++```ts
++import assert from "node:assert/strict";
++import fs from "node:fs";
++import http from "node:http";
++import path from "node:path";
++import { fileURLToPath } from "node:url";
++import express from "express";
++import { createCasparRouter } from "../../src/restApi.js";
++
++const FORBIDDEN_DEPENDENCIES = [
++  "wrtc",
++  "mediasoup",
++  "simple-peer",
++  "jitsi-meet",
++  "livekit-server",
++];
++
++async function ensureForbiddenDepsAbsent(repoRoot: string) {
++  const packageJsonPath = path.join(repoRoot, "server", "package.json");
++  const pkg = JSON.parse(await fs.promises.readFile(packageJsonPath, "utf8"));
++  const sections = [pkg.dependencies ?? {}, pkg.devDependencies ?? {}];
++  for (const forbidden of FORBIDDEN_DEPENDENCIES) {
++    for (const section of sections) {
++      assert.ok(
++        !Object.prototype.hasOwnProperty.call(section, forbidden),
++        `Forbidden dependency detected: ${forbidden}`,
++      );
++    }
++  }
++}
++
++async function ensureHlsArtifact(repoRoot: string) {
++  const preview = path.join(repoRoot, "previewer", "public", "preview", "main.m3u8");
++  const stat = await fs.promises.stat(preview);
++  assert.ok(stat.isFile(), "HLS preview manifest must exist");
++}
++
++async function ensureCasparRoutes() {
++  const issued: string[] = [];
++  const app = express();
++  app.use(express.json());
++  app.use(
++    "/api/caspar",
++    createCasparRouter(
++      {
++        send: async (command: string) => {
++          issued.push(command);
++          return "202 OK";
++        },
++      },
++    ),
++  );
++
++  const server = http.createServer(app);
++  await new Promise<void>((resolve) => server.listen(0, resolve));
++  const address = server.address();
++  assert.ok(address && typeof address === "object", "Server must expose address info");
++  const port = address.port;
++
++  const baseUrl = `http://127.0.0.1:${port}`;
++
++  // AT-CASPAR-REST-001: PLAY command dispatch
++  let response = await fetch(`${baseUrl}/api/caspar/play`, {
++    method: "POST",
++    headers: { "content-type": "application/json" },
++    body: JSON.stringify({ clip: "AMB" }),
++  });
++  assert.equal(response.status, 200, "play should return HTTP 200");
++  let body = await response.json();
++  assert.equal(body.ok, true, "play payload should confirm success");
++  assert.equal(issued.at(-1), 'PLAY 1-1 "AMB"');
++
++  // AT-CASPAR-REST-002: STOP command dispatch with override
++  response = await fetch(`${baseUrl}/api/caspar/stop`, {
++    method: "POST",
++    headers: { "content-type": "application/json" },
++    body: JSON.stringify({ channel: 2, layer: 3 }),
++  });
++  assert.equal(response.status, 200, "stop should return HTTP 200");
++  body = await response.json();
++  assert.equal(body.ok, true, "stop payload should confirm success");
++  assert.equal(issued.at(-1), "STOP 2-3");
++
++  // AT-CASPAR-REST-003: LOADBG command dispatch with loop
++  response = await fetch(`${baseUrl}/api/caspar/loadbg`, {
++    method: "POST",
++    headers: { "content-type": "application/json" },
++    body: JSON.stringify({ clip: "LOOP", loop: true }),
++  });
++  assert.equal(response.status, 200, "loadbg should return HTTP 200");
++  body = await response.json();
++  assert.equal(body.ok, true, "loadbg payload should confirm success");
++  assert.equal(issued.at(-1), 'LOADBG 1-1 "LOOP" LOOP');
++
++  // AT-CASPAR-REST-004: clip validation
++  response = await fetch(`${baseUrl}/api/caspar/loadbg`, {
++    method: "POST",
++    headers: { "content-type": "application/json" },
++    body: JSON.stringify({ clip: "   " }),
++  });
++  assert.equal(response.status, 400, "clip validation should trigger HTTP 400");
++
++  await new Promise<void>((resolve) => server.close(() => resolve()));
++}
++
++async function main() {
++  const __filenameLocal = fileURLToPath(import.meta.url);
++  const __dirnameLocal = path.dirname(__filenameLocal);
++  const serverRoot = path.resolve(__dirnameLocal, "..", "..");
++  const repoRoot = path.resolve(serverRoot, "..");
++
++  await ensureForbiddenDepsAbsent(repoRoot);
++  await ensureHlsArtifact(repoRoot);
++  await ensureCasparRoutes();
++}
++
++main().catch((error) => {
++  console.error(error);
++  process.exitCode = 1;
++});
++```
++
++## `server/tests/unit/oscBridge.spec.ts`
++```ts
++import assert from "node:assert/strict";
++import { applyOscUpdate, type StatusEvent } from "../../src/oscBridge.js";
++
++// AT-OSC-STATUS-001: OSC updates must retain clip/time/fps/duration state per channel/layer.
++async function main() {
++  const state = new Map<string, StatusEvent>();
++
++  let payload = applyOscUpdate(state, {
++    address: "/channel/1/stage/layer/1/file/name",
++    args: ["AMB"],
++  });
++  assert.ok(payload, "clip name update should emit payload");
++  assert.equal(payload?.clipName, "AMB");
++  assert.equal(payload?.onAir, true);
++
++  payload = applyOscUpdate(state, {
++    address: "/channel/1/stage/layer/1/file/time",
++    args: ["00:00:05", 25],
++  });
++  assert.ok(payload, "time update should emit payload");
++  assert.equal(payload?.clipName, "AMB", "clipName should persist across updates");
++  assert.equal(payload?.timecode, "00:00:05");
++  assert.equal(payload?.fps, 25);
++  assert.equal(payload?.onAir, true);
++
++  payload = applyOscUpdate(state, {
++    address: "/channel/1/stage/layer/1/file/time",
++    args: [
++      { type: "s", value: "00:00:06" },
++      { type: "f", value: 29.97 },
++    ],
++  });
++  assert.ok(payload, "structured OSC args should be unwrapped");
++  assert.equal(payload?.timecode, "00:00:06");
++  assert.equal(payload?.fps, 29.97);
++
++  payload = applyOscUpdate(state, {
++    address: "/channel/1/stage/layer/1/file/duration",
++    args: ["00:00:10"],
++  });
++  assert.ok(payload);
++  assert.equal(payload?.duration, "00:00:10");
++  assert.equal(payload?.clipName, "AMB");
++
++  payload = applyOscUpdate(state, {
++    address: "/channel/1/stage/layer/1/file/frame",
++    args: [42],
++  });
++  assert.ok(payload);
++  assert.equal(payload?.frame, 42);
++
++  payload = applyOscUpdate(state, {
++    address: "/channel/1/stage/layer/1/foreground",
++    args: [0],
++  });
++  assert.ok(payload);
++  assert.equal(payload?.onAir, false);
++  assert.equal(payload?.clipName, "AMB");
++
++  const noChange = applyOscUpdate(state, {
++    address: "/channel/1/stage/layer/1/file/frame",
++    args: [42],
++  });
++  assert.equal(noChange, null, "repeated values should not emit");
++}
++
++main().catch((error) => {
++  console.error(error);
++  process.exitCode = 1;
++});
++```
++
+ 
+EOF
+)

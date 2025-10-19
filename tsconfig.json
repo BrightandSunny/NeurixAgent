@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2019",
+    "module": "commonjs",
+    "outDir": "dist",
+    "rootDir": ".",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": [
+    "router/**/*.ts",
+    "tests/**/*.ts"
+  ],
+  "exclude": [
+    "tests",
+    "**/*.spec.ts",
+    "**/*.test.ts"
+  ]
+}

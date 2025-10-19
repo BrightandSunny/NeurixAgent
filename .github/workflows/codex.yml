@@ -1,0 +1,29 @@
+name: NeurixAgent Codex
+on:
+  workflow_dispatch:
+  pull_request: { branches: [ main, feat/** ] }
+  push: { branches: [ feat/** ] }
+
+jobs:
+  codex:
+    runs-on: ubuntu-latest
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      NEURIX_ASSISTANT_ID: ${{ secrets.NEURIX_ASSISTANT_ID }}
+      NEURIX_THREAD_ID: ${{ secrets.NEURIX_THREAD_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 18 }
+      - run: corepack enable
+      - run: yarn install --frozen-lockfile || npm i
+      - name: Build task from diff
+        shell: pwsh
+        run: pwsh tools/np-task.ps1 -Repo "${{ github.workspace }}"
+      - name: Run Codex
+        run: yarn tsx router/src/cli/codex.ts np-task.json
+      - name: Post result to chat
+        run: yarn tsx tools/post-codex-result.ts np-task.json
+      - name: Dry-run apply
+        shell: pwsh
+        run: pwsh tools/apply-from-task.ps1 np-task.json

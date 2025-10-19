@@ -1,0 +1,14 @@
+{
+  "ok": true,
+  "atIds": [
+    "AT-NP-001"
+  ],
+  "branch": "chore/codex-20251013-204428",
+  "summary": "Model returned invalid JSON. No patch.",
+  "blocking_issues": [],
+  "non_blocking": [
+    "Retry with stricter JSON-only instructions."
+  ],
+  "suggested_patch_unified": "",
+  "type": "codex.task.v1"
+}

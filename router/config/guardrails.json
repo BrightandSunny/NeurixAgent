@@ -1,0 +1,6 @@
+{
+  "response_format": "json_only",
+  "require_unified_diff": true,
+  "max_patch_files": 50,
+  "max_hunks_per_file": 100
+}

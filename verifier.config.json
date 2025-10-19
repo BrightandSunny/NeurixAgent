@@ -1,0 +1,8 @@
+{
+  "run": [
+    "yarn tsc -p tsconfig.json --noEmit",
+    "yarn eslint . --max-warnings=0",
+    "yarn prettier -c .",
+    "yarn test -i"
+  ]
+}

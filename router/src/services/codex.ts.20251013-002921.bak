@@ -1,0 +1,68 @@
+// router/src/services/codex.ts
+import OpenAI from "openai";
+import { z } from "zod";
+
+const ReviewSchema = z.object({
+  summary: z.string(),
+  blocking_issues: z.array(z.object({
+    file: z.string(),
+    line: z.number().optional(),
+    issue: z.string(),
+    fix: z.string()
+  })).default([]),
+  non_blocking: z.array(z.string()).default([]),
+  suggested_patch_unified: z.string().default("")
+});
+export type ReviewResult = z.infer<typeof ReviewSchema>;
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || ""
+});
+
+export async function codexReview(params: {
+  repoName: string;
+  diffOrFiles: string;
+  guidelines?: string[];
+}): Promise<ReviewResult> {
+  // If no key, return a stub so smoke tests pass without network:
+  if (!process.env.OPENAI_API_KEY) {
+    return {
+      summary: "Stub review (no OPENAI_API_KEY set).",
+      blocking_issues: [],
+      non_blocking: ["Set OPENAI_API_KEY to enable real Codex review."],
+      suggested_patch_unified: ""
+    };
+  }
+
+  const system = [
+    "You are a senior code reviewer (focus: correctness, security, tests).",
+    "Return ONLY JSON matching the provided schema. Do not include prose."
+  ].join("\n");
+
+  const user = [
+    `Repository: ${params.repoName}`,
+    params.guidelines?.length ? `Guidelines:\n- ${params.guidelines.join("\n- ")}` : "",
+    "Content to review:",
+    params.diffOrFiles
+  ].join("\n\n");
+
+  const resp = await openai.responses.create({
+    model: "gpt-5-codex",
+    input: [
+      { role: "developer", content: system },
+      { role: "user", content: user }
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "CodeReview",
+        schema: ReviewSchema.toJSON(),
+        strict: true
+      }
+    },
+    temperature: 0.1
+  });
+
+  const jsonText = resp.output_text;
+  return ReviewSchema.parse(JSON.parse(jsonText));
+}

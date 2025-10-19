@@ -1,0 +1,24 @@
+Qwen New Diff script
+
+➤ Open Notepad or VS Code
+Copy your entire diff content (from diff --git ... to EOF) into a new file.
+
+⚠️ Make sure:
+
+You remove the outer cd ... && git apply ... <<'EOF' wrapper
+You save it as new_diff.patch (no BOM, UTF-8 encoding)
+In VS Code:
+
+File → Save As → Choose new_diff.patch
+At bottom right, click UTF-8 → make sure it says “UTF-8 without BOM” 
+
+----------------------------------------------------------------------------------------------------
+
+# 1. Remove existing file (if any)
+Remove-Item D:\NeurixPlay\server\NEW_DIFF_DROPINS.md -Force -ErrorAction SilentlyContinue
+
+# 2. Apply patch with full path and ignore whitespace
+git -C D:\NeurixPlay apply --ignore-space-change "D:/NeurixPlay/Diff/new_diff.patch"
+
+# 3. Extract files
+python D:\NeurixPlay\Diff\extract_files.py

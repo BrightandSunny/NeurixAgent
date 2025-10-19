@@ -1,0 +1,23 @@
+{
+  "type": "codex.task.v1",
+  "repoPath": "D:\\NeurixPlay",
+  "branch": "chore/codex-20251013-204428",
+  "instructions": "Return ONLY JSON matching Review schema. You MUST include a unified diff patch in 'suggested_patch_unified' that fixes the double semicolon and adds types to mul(a:number,b:number). No refactors.",
+  "atIds": [
+    "AT-NP-001"
+  ],
+  "diffOrFiles": [
+    "diff --git a/codex-demo.ts b/codex-demo.ts",
+    "index 0e133cf..2d72d7c 100644",
+    "--- a/codex-demo.ts",
+    "+++ b/codex-demo.ts",
+    "@@ -1,6 +1 @@",
+    "-export function add(a:number,b:number){",
+    "-  return a + b;",
+    "-}",
+    "-export function mul(a:number,b:number){",
+    "-  return a * b;",
+    "-}",
+    "+export const add=(a:number,b:number)=>a+b;;"
+  ]
+}

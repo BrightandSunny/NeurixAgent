@@ -1,0 +1,57 @@
+// router/src/pipelines/codexPipeline.ts
+import { codexReview } from "../services/codex";
+
+export type CodexTask = {
+  repoPath: string;
+  branch: string;
+  instructions: string;
+  atIds: string[];
+  diffOrFiles?: string;
+};
+
+export async function execute(task: CodexTask) {
+  const guidelines = [
+    "TypeScript strict; no any",
+    "No inline styles; use Tailwind/shadcn",
+    "Follow project theming tokens"
+  ];
+
+  const diffOrFiles = task.diffOrFiles || "/* smoke: AT-CODEX-001 Touch marker */";
+
+  const result = await codexReview({
+    repoName: task.repoPath || "NeurixAgent",
+    diffOrFiles,
+    guidelines
+  });
+
+  const output = {
+    ok: true,
+    atIds: task.atIds,
+    branch: task.branch,
+    summary: result.summary,
+    blocking_issues: result.blocking_issues,
+    non_blocking: result.non_blocking,
+    suggested_patch_unified: result.suggested_patch_unified
+  };
+
+  console.log(JSON.stringify(output, null, 2));
+  return output;
+}
+
+// Allow: node -e "require('./dist/router/src/pipelines/codexPipeline').main?.()"
+export async function main() {
+  const task: CodexTask = {
+    repoPath: "NeurixAgent",
+    branch: "chore/smoke",
+    instructions: "Touch marker",
+    atIds: ["AT-CODEX-001"]
+  };
+  await execute(task);
+}
+
+if (require.main === module) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

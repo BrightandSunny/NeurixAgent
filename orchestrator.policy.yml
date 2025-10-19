@@ -1,0 +1,15 @@
+providers:
+  default_order: [openai, qwen, gemini]
+  caps:
+    max_concurrency: 6
+    per_item_timeout_ms: 120000
+    token_budget: 60000
+    temperature: 0
+routing:
+  by_language:
+    ts:   [openai, qwen, gemini]
+    tsx:  [openai, gemini, qwen]
+    json: [openai]
+minimal_patch:
+  touch_only_files_in_workitems: true
+  reject_overlapping_hunks: true
