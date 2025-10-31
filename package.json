@@ -4,7 +4,10 @@
   "version": "0.1.0",
   "license": "UNLICENSED",
   "packageManager": "yarn@1.22.22",
-  "engines": { "node": ">=18.18 <21", "yarn": ">=1.22 <2" },
+  "engines": {
+    "node": ">=18.18 <21",
+    "yarn": ">=1.22 <2"
+  },
   "scripts": {
     "//": "----- FAST GATE (TS-only) -----",
     "typecheck": "tsc -p tsconfig.json --noEmit",
@@ -41,7 +44,10 @@
     "format": "prettier -w .",
     "format:check": "prettier -c ."
   },
-  "dependencies": { "openai": "^4.104.0", "zod": "^3.23.8" },
+  "dependencies": {
+    "openai": "^4.104.0",
+    "zod": "^3.23.8"
+  },
   "devDependencies": {
     "@types/jest": "29.5.12",
     "dotenv": "^17.2.3",

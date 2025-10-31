@@ -29,7 +29,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '18.19.1'
+          node-version: "18.19.1"
 
       - name: Enable corepack + pin Yarn 1.22.22
         run: corepack enable && yarn set version 1.22.22
