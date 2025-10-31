@@ -1,4 +1,4 @@
-name: NeurixAgent Codex
+name: Codex Review (PR/Dispatch)
 on:
   workflow_dispatch:
   pull_request:
@@ -9,7 +9,7 @@ permissions:
   actions: read
 
 jobs:
-  codex:
+  review:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -21,8 +21,6 @@ jobs:
           git config --global --add safe.directory "*"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --global user.name  "github-actions[bot]"
-          git status || true
-          git rev-parse --is-inside-work-tree || true
       - uses: actions/setup-node@v4
         with:
           node-version: '18.19.1'

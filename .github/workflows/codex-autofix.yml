@@ -1,5 +1,4 @@
-$yml = @'
-name: codex-autofix
+name: Codex Autofix (PR/Dispatch)
 on:
   workflow_dispatch:
   pull_request:
@@ -22,15 +21,13 @@ jobs:
           git config --global --add safe.directory "*"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --global user.name  "github-actions[bot]"
-          git status || true
-          git rev-parse --is-inside-work-tree || true
       - uses: actions/setup-node@v4
         with:
           node-version: '18.19.1'
       - run: corepack enable && yarn set version 1.22.22
       - run: yarn install --frozen-lockfile
       - run: yarn add -D typescript tsx openai@^4
-      - name: Run Codex Autofix (no commit; produce patch)
+      - name: Run Codex Autofix (stub)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: yarn codex:fix
@@ -42,9 +39,3 @@ jobs:
           name: codex-patch
           path: codex.patch
           if-no-files-found: warn
-'@
-
-Set-Content -Path .github/workflows/codex-autofix.yml -Value $yml -Encoding utf8
-git add .github/workflows/codex-autofix.yml
-git commit -m "ci(codex): PR+dispatch only; safe git; artifact-only autofix"
-git push
