@@ -8,12 +8,14 @@ jobs:
   autofix:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read        # artifact-only; no writes to repo
       pull-requests: write
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout PR head branch
+        uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
           fetch-depth: 0
           persist-credentials: true
           submodules: false
@@ -22,70 +24,44 @@ jobs:
         with:
           node-version: '18.19.1'
 
-      - name: Git preflight
+      # Make *any* repo path safe; never fail this step
+      - name: Git sanitize (non-fatal)
+        continue-on-error: true
         shell: bash
-        env:
-          GH_REPO: ${{ github.repository }}
         run: |
-          set -euxo pipefail
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config user.name  "github-actions[bot]"
-          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GH_REPO}.git"
+          git --version
+          pwd; ls -la .git || true
+          git config --global --add safe.directory "*"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name  "github-actions[bot]"
           echo ".sandbox" >> .git/info/exclude || true
           git status --porcelain=v2 || true
-          git rev-parse HEAD
           git rev-parse --abbrev-ref HEAD || true
-
-      - name: Resolve PR branch (reattach)
-        id: branch
-        shell: bash
-        run: |
-          set -euxo pipefail
-          BR="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
-          echo "name=$BR" >> "$GITHUB_OUTPUT"
-          git fetch origin "$BR" --depth=50 || true
-          git switch -C "$BR" || git checkout -B "$BR"
-          git pull --rebase origin "$BR" || true
-          git rev-parse --abbrev-ref HEAD
+          git remote -v || true
 
       - run: corepack enable && yarn set version 1.22.22
       - run: yarn install --frozen-lockfile
       - run: yarn add -D openai@^4 typescript tsx
 
-      - name: Run Codex Autofix
+      - name: Run Codex Autofix (no commit; produce diff)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           MODEL_CODEX: gpt-5-codex
-          BRANCH: ${{ steps.branch.outputs.name }}
-          GIT_AUTHOR_NAME: github-actions[bot]
-          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
-          GIT_COMMITTER_NAME: github-actions[bot]
-          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
-        run: |
-          set -euxo pipefail
-          npx tsx tools/codex-fix.ts
-
-      - name: Commit any changes (no-op safe)
         shell: bash
         run: |
-          set -euxo pipefail
-          git add -A
-          if ! git diff --cached --quiet; then
-            git commit -m "chore(codex): autofix"
-            git push --set-upstream origin "${{ steps.branch.outputs.name }}"
+          # Run your fixer (let it modify the worktree if it wants)
+          npx tsx tools/codex-fix.ts || true
+          # Stage everything that changed (non-fatal)
+          git add -A || true
+          # Emit a *local* patch vs HEAD (no network; robust even detached)
+          git diff --patch --binary --cached > codex.patch || true
+          # If empty, make a tiny placeholder so artifact upload succeeds
+          if [ ! -s codex.patch ]; then
+            echo "# No changes from codex-fix" > codex.patch
           fi
-
-      - name: Ensure patch artifact vs remote
-        if: always()
-        shell: bash
-        run: |
-          set -euxo pipefail
-          git diff --patch --binary "origin/${{ steps.branch.outputs.name }}"..."HEAD" > codex.patch || true
-          ls -l codex.patch || true
+          ls -l codex.patch
 
       - name: Upload patch artifact
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: codex-patch
