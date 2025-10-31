@@ -33,7 +33,7 @@
     "test": "jest --config jest.config.js --runInBand"
   },
   "dependencies": {
-    "openai": "^4.60.0",
+    "openai": "^4",
     "zod": "^3.23.8"
   },
   "devDependencies": {

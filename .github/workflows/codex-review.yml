@@ -1,15 +1,14 @@
 
-name: codex-autofix
+name: codex-review
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize]
 jobs:
-  autofix:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
+  review:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
@@ -20,14 +19,16 @@ jobs:
       - run: yarn install --frozen-lockfile
       - name: Install script deps
         run: yarn add -D openai@^4.0.0
-      - name: Run Codex Autofix
+      - name: Generate Review
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          MODEL_CODEX: gpt-5-codex
-        run: node tools/codex-fix.ts
-      - name: Upload patch artifact
+          MODEL_REVIEW: gpt-5
+        run: |
+          git diff --staged || true
+          node tools/codex-review.ts || true
+      - name: Upload Review
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: codex-patch
-          path: codex.patch
+          name: codex-review
+          path: codex-review.md
