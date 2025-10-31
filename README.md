@@ -1,1 +1,2 @@
-NeurixAgent CI bootstrap 10/31/2025 01:00:42
+'NeurixAgent – Codex router + task tools.' | Out-File -Encoding utf8 -NoNewline README.md
+git add README.md && git commit -m "docs: add README" && git push
