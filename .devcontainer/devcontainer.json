@@ -4,6 +4,12 @@
   "features": { "ghcr.io/devcontainers/features/github-cli:1": {} },
   "postCreateCommand": "corepack enable && (yarn --version || npm i -g yarn) && (yarn install || npm i)",
   "customizations": {
-    "vscode": { "extensions": ["dbaeumer.vscode-eslint","esbenp.prettier-vscode","ms-vscode.vscode-typescript-next"] }
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-typescript-next"
+      ]
+    }
   }
 }

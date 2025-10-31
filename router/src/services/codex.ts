@@ -54,7 +54,11 @@ export async function codexReview(task: {
       atIds: { type: "array", items: { type: "string" }, default: [] },
       branch: { type: "string", default: "chore/codex" },
       summary: { type: "string", default: "" },
-      blocking_issues: { type: "array", items: { type: "string" }, default: [] },
+      blocking_issues: {
+        type: "array",
+        items: { type: "string" },
+        default: [],
+      },
       non_blocking: { type: "array", items: { type: "string" }, default: [] },
       suggested_patch_unified: { type: "string", default: "" },
       // IMPORTANT: this is the field named "type" in your result, and it itself must

@@ -8,9 +8,15 @@ function ensureSandbox() {
   if (!fs.existsSync(sandbox)) fs.mkdirSync(sandbox);
   // Minimal git repo for the stub driver:
   if (!fs.existsSync(path.join(sandbox, ".git"))) {
-    require("child_process").execSync("git init", { cwd: sandbox, stdio: "inherit" });
+    require("child_process").execSync("git init", {
+      cwd: sandbox,
+      stdio: "inherit",
+    });
     fs.writeFileSync(path.join(sandbox, "README.md"), "# Sandbox\\n", "utf8");
-    require("child_process").execSync("git add . && git commit -m init", { cwd: sandbox, stdio: "inherit" });
+    require("child_process").execSync("git add . && git commit -m init", {
+      cwd: sandbox,
+      stdio: "inherit",
+    });
   }
 }
 
@@ -23,7 +29,7 @@ describe("AT-CODEX-001: Router -> Codex stub path", () => {
       repoPath: sandbox,
       branch: "chore/codex-stub",
       atIds: ["AT-CODEX-001"],
-      instructions: "Create or update a small marker file to simulate a patch."
+      instructions: "Create or update a small marker file to simulate a patch.",
     });
     expect(result.ok).toBe(true);
     const marker = path.join(sandbox, "CODEx_STUB.md");

@@ -6,7 +6,10 @@ export function* walk(root: string): Generator<string> {
   while (stack.length) {
     const cur = stack.pop()!;
     const st = fs.statSync(cur);
-    if (st.isDirectory()) for (const n of fs.readdirSync(cur)) { if (!n.startsWith(".git")) stack.push(path.join(cur, n)); }
+    if (st.isDirectory())
+      for (const n of fs.readdirSync(cur)) {
+        if (!n.startsWith(".git")) stack.push(path.join(cur, n));
+      }
     else yield cur;
   }
 }
@@ -18,7 +21,12 @@ export function indexFiles(paths: string[], maxLines = 80): Chunk[] {
     const lines = text.split(/\r?\n/);
     for (let i = 0; i < lines.length; i += maxLines) {
       const slice = lines.slice(i, i + maxLines);
-      out.push({ file: path.relative(process.cwd(), p), from: i + 1, to: i + slice.length, text: slice.join("\n") });
+      out.push({
+        file: path.relative(process.cwd(), p),
+        from: i + 1,
+        to: i + slice.length,
+        text: slice.join("\n"),
+      });
     }
   }
   return out;

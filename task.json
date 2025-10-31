@@ -3,9 +3,7 @@
   "repoPath": ".sandbox",
   "branch": "chore/codex-real",
   "instructions": "You MUST return a unified diff patch in 'suggested_patch_unified' fixing the double semicolon and adding TS types to mul(a:number,b:number). No refactors.",
-  "atIds": [
-    "AT-CODEX-REAL-001"
-  ],
+  "atIds": ["AT-CODEX-REAL-001"],
   "diffOrFiles": [
     "diff --git a/calc.ts b/calc.ts",
     "index 43a02b8..9ab29f5 100644",

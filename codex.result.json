@@ -1,8 +1,6 @@
 {
   "ok": true,
-  "atIds": [
-    "AT-NP-001"
-  ],
+  "atIds": ["AT-NP-001"],
   "branch": "main",
   "summary": "Add README-CODEX.txt and noop.ts files.",
   "blocking_issues": [],

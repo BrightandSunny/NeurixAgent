@@ -4,8 +4,15 @@ import OpenAI from "openai";
   const assistant = await client.beta.assistants.create({
     name: "NeurixAgent Console",
     model: "gpt-4o-mini",
-    instructions: "You are the NeurixAgent console. Summarize results tersely and suggest the next action."
+    instructions:
+      "You are the NeurixAgent console. Summarize results tersely and suggest the next action.",
   });
   const thread = await client.beta.threads.create({});
-  console.log(JSON.stringify({ assistant_id: assistant.id, thread_id: thread.id }, null, 2));
+  console.log(
+    JSON.stringify(
+      { assistant_id: assistant.id, thread_id: thread.id },
+      null,
+      2,
+    ),
+  );
 })();

@@ -2,15 +2,15 @@
 
 // ---------- Shared types consumed by orchestrators ----------
 export interface WorkItem {
-  file: string;              // used by parallel orchestrator for locking
+  file: string; // used by parallel orchestrator for locking
   payload?: unknown;
   [key: string]: unknown;
 }
 
 export interface ReviewResult {
-  ok: boolean;               // REQUIRED by orchestrator
-  patch?: string;            // optional accumulated patch text
-  [key: string]: unknown;    // keep everything else for debugging/metrics
+  ok: boolean; // REQUIRED by orchestrator
+  patch?: string; // optional accumulated patch text
+  [key: string]: unknown; // keep everything else for debugging/metrics
 }
 
 export interface Provider {
@@ -41,8 +41,7 @@ function toReviewResult(r: unknown): ReviewResult {
         ? (o.success as boolean)
         : Boolean(o.patch); // if it produced a patch, consider it ok
 
-  const patch =
-    typeof o.patch === "string" ? (o.patch as string) : undefined;
+  const patch = typeof o.patch === "string" ? (o.patch as string) : undefined;
 
   return { ok, patch, ...o };
 }
@@ -64,7 +63,7 @@ export const providers = {
 export type ProviderName = keyof typeof providers;
 
 export function pickProviders(
-  names?: ProviderName | ProviderName[] | "all" | string
+  names?: ProviderName | ProviderName[] | "all" | string,
 ): Provider[] {
   if (!names || names === "all") return Object.values(providers);
   const list = Array.isArray(names) ? names : [names];
@@ -76,5 +75,3 @@ export function pickProviders(
 
 export default providers;
 const REGISTRY: Provider[] = [openaiAdapter];
-
-

@@ -12,7 +12,7 @@ describe("AT-CODEX-002: Router -> Codex CLI path", () => {
       repoPath: sandbox,
       branch: "chore/codex-cli",
       atIds: ["AT-CODEX-002"],
-      instructions: "Apply a minimal patch per AGENTS.md."
+      instructions: "Apply a minimal patch per AGENTS.md.",
     });
     expect(result.ok).toBe(true);
   });
