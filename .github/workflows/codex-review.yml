@@ -1,0 +1,43 @@
+name: NeurixAgent Codex
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: ["main", "release/*"]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  codex:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Git sanitize (non-fatal)
+        run: |
+          git --version || true
+          git config --global --add safe.directory "*"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name  "github-actions[bot]"
+          git status || true
+          git rev-parse --is-inside-work-tree || true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18.19.1'
+      - run: corepack enable && yarn set version 1.22.22
+      - run: yarn install --frozen-lockfile
+      - run: yarn add -D typescript tsx openai@^4
+      - name: Generate Review
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: yarn codex:review
+        continue-on-error: true
+      - name: Upload Review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codex-review
+          path: codex-review.md
+          if-no-files-found: warn
