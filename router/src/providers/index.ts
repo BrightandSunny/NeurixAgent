@@ -75,3 +75,6 @@ export function pickProviders(
 }
 
 export default providers;
+const REGISTRY: Provider[] = [openaiAdapter];
+
+

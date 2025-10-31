@@ -3,12 +3,10 @@
   "atIds": [
     "AT-NP-001"
   ],
-  "branch": "chore/codex-20251013-204428",
-  "summary": "Model returned invalid JSON. No patch.",
+  "branch": "main",
+  "summary": "Add README-CODEX.txt and noop.ts files.",
   "blocking_issues": [],
-  "non_blocking": [
-    "Retry with stricter JSON-only instructions."
-  ],
-  "suggested_patch_unified": "",
+  "non_blocking": [],
+  "suggested_patch_unified": "--- a/README-CODEX.txt\n+++ b/README-CODEX.txt\n@@ -0,0 +1 @@\n+This is a Codex smoke.\n--- a/server/src/noop.ts\n+++ b/server/src/noop.ts\n@@ -0,0 +1 @@\n+export const noop = () => {}",
   "type": "codex.task.v1"
 }

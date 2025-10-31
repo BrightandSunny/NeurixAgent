@@ -43,3 +43,4 @@ function pickProviders(names) {
         .map((n) => exports.providers[n]);
 }
 exports.default = exports.providers;
+const REGISTRY = [openaiAdapter];

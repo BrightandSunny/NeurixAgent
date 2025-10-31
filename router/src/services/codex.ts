@@ -7,10 +7,10 @@ const ReviewSchema = z.object({
   atIds: z.array(z.string()).default([]),
   branch: z.string().default("chore/codex"),
   summary: z.string().default(""),
-  blocking_issues: z.array(z.any()).default([]),
-  non_blocking: z.array(z.any()).default([]),
+  blocking_issues: z.array(z.string()).default([]),
+  non_blocking: z.array(z.string()).default([]),
   suggested_patch_unified: z.string().default(""),
-  type: z.literal("codex.task.v1")
+  type: z.literal("codex.task.v1"),
 });
 export type ReviewResult = z.infer<typeof ReviewSchema>;
 
@@ -24,45 +24,103 @@ export async function codexReview(task: {
 
   const system = [
     "You are a code review agent.",
-    "Return JSON only, matching the Review schema.",
+    "Return JSON ONLY that matches the provided JSON Schema (no markdown, no extra text).",
     "If proposing edits, include a unified diff in 'suggested_patch_unified'.",
-    "No prose outside JSON."
   ].join("\n");
 
   const user = [
     `INSTRUCTIONS:\n${task.instructions}`,
     "",
     "DIFF_OR_FILES (unified-0 diff or file blobs below):",
-    task.diffOrFiles
+    task.diffOrFiles,
   ].join("\n");
 
-  // Type-safe at runtime, but tell TS to stop complaining about response_format.
-  const payload: any = {
-    model: "gpt-4o-mini",
-    response_format: { type: "json_object" },
-    input: [{ role: "system", content: system }, { role: "user", content: user }]
-  };
+  // JSON Schema that the Responses API will validate BEFORE returning output.
+  const reviewJsonSchema = {
+    type: "object",
+    additionalProperties: false,
+    required: [
+      "ok",
+      "atIds",
+      "branch",
+      "summary",
+      "blocking_issues",
+      "non_blocking",
+      "suggested_patch_unified",
+      "type",
+    ],
+    properties: {
+      ok: { type: "boolean", default: true },
+      atIds: { type: "array", items: { type: "string" }, default: [] },
+      branch: { type: "string", default: "chore/codex" },
+      summary: { type: "string", default: "" },
+      blocking_issues: { type: "array", items: { type: "string" }, default: [] },
+      non_blocking: { type: "array", items: { type: "string" }, default: [] },
+      suggested_patch_unified: { type: "string", default: "" },
+      // IMPORTANT: this is the field named "type" in your result, and it itself must
+      // have a JSON-Schema "type" (string) plus an enum to restrict its value.
+      type: { type: "string", enum: ["codex.task.v1"] },
+    },
+  } as const;
 
-  const resp = await client.responses.create(payload);
+  const response = await client.responses.create({
+    model: process.env.OPENAI_MODEL || "gpt-4o-mini",
+    // Responses API content parts must use input_* types.
+    input: [
+      { role: "system", content: [{ type: "input_text", text: system }] },
+      { role: "user", content: [{ type: "input_text", text: user }] },
+    ],
+    text: {
+      format: {
+        type: "json_schema",
+        name: "codex_review_v1",
+        schema: reviewJsonSchema,
+        strict: true,
+      },
+    },
+    temperature: 0.2,
+  });
 
-  const raw = resp.output_text || "{}";
+  // Prefer the convenience field; fall back to stitching output parts.
+  const raw =
+    response.output_text ??
+    (() => {
+      try {
+        const parts =
+          response.output?.flatMap((m: any) => m?.content ?? []) ?? [];
+        const text = parts
+          .filter((p: any) => p?.type === "output_text")
+          .map((p: any) => p?.text ?? "")
+          .join("");
+        return text || "{}";
+      } catch {
+        return "{}";
+      }
+    })();
+
+  // Parse and validate against our local Zod schema for safety.
   try {
     return ReviewSchema.parse(JSON.parse(raw));
   } catch {
-    // last-resort: try to peel JSON from any stray text
+    // Last resort: try to peel JSON if any stray characters slipped in.
     const m = raw.match(/\{[\s\S]*\}$/);
     if (m) {
-      try { return ReviewSchema.parse(JSON.parse(m[0])); } catch {}
+      try {
+        return ReviewSchema.parse(JSON.parse(m[0]));
+      } catch {
+        /* fall through */
+      }
     }
     return {
       ok: true,
       atIds: task.atIds ?? [],
       branch: task.branch ?? "chore/codex",
-      summary: "Model returned invalid JSON. No patch.",
+      summary:
+        "Model output could not be validated. Returning empty patch and notes.",
       blocking_issues: [],
       non_blocking: ["Retry with stricter JSON-only instructions."],
       suggested_patch_unified: "",
-      type: "codex.task.v1"
+      type: "codex.task.v1",
     };
   }
 }

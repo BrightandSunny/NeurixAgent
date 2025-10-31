@@ -8,6 +8,17 @@
     "yarn": ">=1.22 <2"
   },
   "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "build:clean": "rimraf dist && tsc -p tsconfig.json",
+    "dev:parallel": "tsx router/src/orchestrator/parallel.ts",
+    "start:parallel": "node -r dotenv/config dist/router/src/orchestrator/parallel.js",
+    "dev:codex": "dotenv -e .env -- tsx router/src/cli/codex.ts",
+    "start:codex": "node -r dotenv/config dist/router/src/cli/codex.js",
+    "codex:run": "dotenv -e .env -- tsx router/src/cli/codex.ts np-task.json",
+    "phase:run": "dotenv -e .env -- tsx router/src/cli/phase.ts phase.plan.json",
+    "smoke": "dotenv -e .env -- tsx router/src/pipelines/codexPipeline.ts",
+    "dev": "dotenv -e .env -- tsx watch router/src/pipelines/codexPipeline.ts",
     "np:apply:task": "pwsh tools/apply-from-task.ps1",
     "np:diff": "pwsh tools/np-task.ps1",
     "np:diff:staged": "pwsh tools/np-task.ps1 -Staged",
@@ -15,32 +26,29 @@
     "np:apply": "pwsh tools/apply-codex-patch.ps1",
     "task:diff": "pwsh tools/update-task-diff.ps1",
     "patch:apply": "pwsh tools/apply-codex-patch.ps1",
-    "codex:run": "tsx router/src/cli/codex.ts np-task.json",
-    "phase:run": "tsx router/src/cli/phase.ts phase.plan.json",
-    "build": "tsc -p tsconfig.json",
-    "dev": "tsx watch router/src/pipelines/codexPipeline.ts",
-    "smoke": "tsx router/src/pipelines/codexPipeline.ts",
-    "test": "jest --config jest.config.js --runInBand",
     "console:init": "tsx console/bootstrap.ts",
     "console:post": "tsx console/post.ts",
-    "verify": "tsx verifier/run.ts"
+    "verify": "tsx verifier/run.ts",
+    "ping": "node -r dotenv/config scripts/ping-openai.js",
+    "test": "jest --config jest.config.js --runInBand"
   },
   "dependencies": {
+    "openai": "^4.60.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "@types/jest": "29.5.12",
+    "dotenv": "^17.2.3",
+    "dotenv-cli": "^10.0.0",
     "eslint": "^8.57.0",
     "jest": "29.7.0",
-    "openai": "^4.60.0",
     "prettier": "^3.3.3",
+    "rimraf": "^5.0.7",
     "ts-jest": "29.2.5",
     "tsx": "^4.16.0",
-    "typescript": "^5.6.2",
-    "zod": "^3.23.8"
+    "typescript": "^5.6.2"
   },
   "resolutions": {
-    "rimraf": "5.0.7",
     "jest": "29.7.0",
     "@jest/core": "29.7.0",
     "jest-cli": "29.7.0",
