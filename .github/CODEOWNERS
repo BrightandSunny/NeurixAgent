@@ -1,1 +1,3 @@
-*  @BrightandSunny
+# Require review on workflows + router
+.github/workflows/ @BrightandSunny
+router/**            @BrightandSunny

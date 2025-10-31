@@ -1,19 +1,32 @@
 <!doctype html>
-<html><head><meta charset="utf-8"><title>NeurixAgent Console</title></head>
-<body style="font-family:system-ui;padding:24px;">
-  <h1>NeurixAgent Console (dev)</h1>
-  <form id="f">
-    <input id="t" placeholder="Type a task…" style="width:420px"/> 
-    <button>Run</button>
-  </form>
-  <pre id="o"></pre>
-<script>
-document.getElementById('f').onsubmit = async (e) => {
-  e.preventDefault();
-  const text = document.getElementById('t').value;
-  const res = await fetch('/api/run', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text})});
-  const json = await res.json();
-  document.getElementById('o').textContent = JSON.stringify(json, null, 2);
-};
-</script>
-</body></html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>NeurixAgent Console</title>
+  </head>
+  <body style="font-family: system-ui; padding: 24px">
+    <h1>NeurixAgent Console (dev)</h1>
+    <form id="f">
+      <input id="t" placeholder="Type a task…" style="width: 420px" />
+      <button>Run</button>
+    </form>
+    <pre id="o"></pre>
+    <script>
+      document.getElementById("f").onsubmit = async (e) => {
+        e.preventDefault();
+        const text = document.getElementById("t").value;
+        const res = await fetch("/api/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        const json = await res.json();
+        document.getElementById("o").textContent = JSON.stringify(
+          json,
+          null,
+          2,
+        );
+      };
+    </script>
+  </body>
+</html>

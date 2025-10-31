@@ -17,9 +17,11 @@ export type ProviderResult = {
  * OpenAI provider using the Responses API.
  * Returns a normalized object shape that most registries use.
  */
-export const openaiProvider = async (
-  { system, user, model }: ProviderParams
-): Promise<ProviderResult> => {
+export const openaiProvider = async ({
+  system,
+  user,
+  model,
+}: ProviderParams): Promise<ProviderResult> => {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
   const resp = await client.responses.create({

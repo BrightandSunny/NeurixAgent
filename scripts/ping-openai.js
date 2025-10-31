@@ -17,7 +17,7 @@
     body: JSON.stringify({
       model,
       input: "Say hello in one line",
-      store: false
+      store: false,
     }),
   });
 
@@ -29,7 +29,7 @@
 
   const text = json.output?.[0]?.content?.[0]?.text || json.output_text;
   console.log("OK:", text || "[no text]");
-})().catch(err => {
+})().catch((err) => {
   console.error(err);
   process.exit(1);
 });

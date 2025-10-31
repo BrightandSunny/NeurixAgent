@@ -4,9 +4,7 @@
   "head": "f6ddf96",
   "branch": "chore/codex-20251031-053900",
   "instructions": "Return JSON ONLY matching this exact shape:\r\n\r\n{\r\n  \"ok\": true,\r\n  \"atIds\": [\"AT-NP-001\"],\r\n  \"branch\": \"string\",\r\n  \"summary\": \"string\",\r\n  \"blocking_issues\": [],\r\n  \"non_blocking\": [],\r\n  \"suggested_patch_unified\": \"UNIFIED-0 DIFF ONLY. Start with '--- a/<path>' then '+++ b/<path>' then '@@' hunks. Do NOT include 'diff --git' or 'index' lines.\"\r\n}\r\n\r\nRules:\r\n- Fix ONLY the issues shown in the diff below.\r\n- Minimal edits. No refactors. No new files. Keep original formatting/line-endings.\r\n- Output one unified-0 patch that applies cleanly.",
-  "atIds": [
-    "AT-NP-001"
-  ],
+  "atIds": ["AT-NP-001"],
   "diffOrFiles": [
     "diff --git a/README-CODEX.txt b/README-CODEX.txt",
     "new file mode 100644",
@@ -23,10 +21,7 @@
     "@@ -0,0 +1 @@",
     "+export const noop = () => {}"
   ],
-  "stagedPaths": [
-    "README-CODEX.txt",
-    "server/src/noop.ts"
-  ],
+  "stagedPaths": ["README-CODEX.txt", "server/src/noop.ts"],
   "diff_is_unified_zero": true,
   "generated_at_utc": "2025-10-31T01:39:00Z"
 }

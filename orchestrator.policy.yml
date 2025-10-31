@@ -7,8 +7,8 @@ providers:
     temperature: 0
 routing:
   by_language:
-    ts:   [openai, qwen, gemini]
-    tsx:  [openai, gemini, qwen]
+    ts: [openai, qwen, gemini]
+    tsx: [openai, gemini, qwen]
     json: [openai]
 minimal_patch:
   touch_only_files_in_workitems: true
