@@ -12,3 +12,9 @@ vector/stores
 .sandbox/
 .artifacts/
 
+
+dist/
+node_modules/
+coverage/
+.yarn/
+
