@@ -2,31 +2,55 @@ name: codex-review
 on:
   workflow_dispatch:
   pull_request:
-    types: [opened, synchronize]
+    types: [opened, synchronize, reopened]
+
 jobs:
   review:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
+
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+          submodules: false
+
       - uses: actions/setup-node@v4
-        with: { node-version: '18.19.1' }
-      - name: Configure git identity
+        with:
+          node-version: '18.19.1'
+
+      - name: Git preflight
+        shell: bash
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name  "github-actions[bot]"
+          echo ".sandbox" >> .git/info/exclude || true
+
+      - name: Resolve branch
+        id: branch
+        shell: bash
+        run: |
+          BR="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          echo "name=$BR" >> "$GITHUB_OUTPUT"
+          git fetch origin "$BR" || true
+          git checkout -B "$BR" || true
+          git pull --rebase origin "$BR" || true
+
       - run: corepack enable && yarn set version 1.22.22
       - run: yarn install --frozen-lockfile
-      - name: Install script deps
-        run: yarn add -D openai@^4 typescript tsx
+      - run: yarn add -D openai@^4 typescript tsx
+
       - name: Generate Review
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           MODEL_REVIEW: gpt-5
+          BRANCH: ${{ steps.branch.outputs.name }}
         run: npx tsx tools/codex-review.ts
+
       - name: Upload Review
         if: always()
         uses: actions/upload-artifact@v4
