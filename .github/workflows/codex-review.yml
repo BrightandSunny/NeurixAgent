@@ -39,10 +39,10 @@ jobs:
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Configure npm auth (optional)
-        if: ${{ secrets.NPM_TOKEN != '' }}
+
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" >> ~/.npmrc
+
+
 
       - name: Setup Node (cache Yarn)
         uses: actions/setup-node@v4
