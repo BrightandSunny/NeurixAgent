@@ -32,8 +32,8 @@
     "test": "jest --config jest.config.js --runInBand --passWithNoTests",
     "verify": "yarn -s typecheck",
     "verify:legacy": "tsx verifier/run.ts",
-    "codex:review": "dotenv -e .env -- tsx router/src/cli/codex.ts review",
-    "codex:fix": "dotenv -e .env -- tsx router/src/cli/codex.ts fix"
+    "codex:review": "tsx tools/codex-review.ts",
+    "codex:fix": "tsx tools/codex-fix.ts"
   },
   "dependencies": {
     "openai": "^4.60.0",
