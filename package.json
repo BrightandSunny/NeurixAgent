@@ -31,23 +31,27 @@
     "ping": "node -r dotenv/config scripts/ping-openai.js",
     "test": "jest --config jest.config.js --runInBand --passWithNoTests",
     "verify": "yarn -s typecheck",
-    "verify:legacy": "tsx verifier/run.ts"
+    "verify:legacy": "tsx verifier/run.ts",
+    "codex:review": "dotenv -e .env -- tsx router/src/cli/codex.ts review",
+    "codex:fix": "dotenv -e .env -- tsx router/src/cli/codex.ts fix"
   },
   "dependencies": {
     "openai": "^4.60.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.0",
     "@types/jest": "29.5.12",
     "dotenv": "^17.2.3",
     "dotenv-cli": "^10.0.0",
-    "eslint": "^8.57.0",
+    "eslint": "9",
     "jest": "29.7.0",
     "prettier": "^3.3.3",
     "rimraf": "^5.0.7",
     "ts-jest": "29.2.5",
     "tsx": "^4.16.0",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "typescript-eslint": "^8.46.2"
   },
   "resolutions": {
     "jest": "29.7.0",
