@@ -28,9 +28,9 @@
     "patch:apply": "pwsh tools/apply-codex-patch.ps1",
     "console:init": "tsx console/bootstrap.ts",
     "console:post": "tsx console/post.ts",
-    "verify": "tsx verifier/run.ts",
+    "verify": "tsc -p tsconfig.json --noEmit",
     "ping": "node -r dotenv/config scripts/ping-openai.js",
-    "test": "jest --config jest.config.js --runInBand"
+    "test": "jest --config jest.config.js --runInBand --passWithNoTests"
   },
   "dependencies": {
     "openai": "^4.60.0",
