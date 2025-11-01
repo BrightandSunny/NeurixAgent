@@ -49,9 +49,14 @@
     "prettier": "^3.3.3",
     "rimraf": "^5.0.7",
     "ts-jest": "29.2.5",
+<<<<<<< ours
     "tsx": "^4.16.0",
     "typescript": "^5.6.2",
     "typescript-eslint": "^8.46.2"
+=======
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+>>>>>>> theirs
   },
   "resolutions": {
     "jest": "29.7.0",
