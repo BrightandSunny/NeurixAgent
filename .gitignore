@@ -5,3 +5,13 @@ vector/stores
 
 .env
 
+
+.sandbox/
+.artifacts/
+dist/
+node_modules/
+coverage/
+.yarn/
+
+.artifacts/
+.artifacts/
