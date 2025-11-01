@@ -1,230 +1,117 @@
-name: Codex Autofix (Guardrailed)
+name: Codex Autofix (PR/Dispatch)
 
 on:
-  workflow_run:
-    workflows: ["CI (Guardrailed)", "CI"]
-    types: [completed]
   workflow_dispatch:
-    inputs:
-      driver:
-        description: "Codex driver: stub | cli | api"
-        required: false
-        default: "stub"
-      allow_internet:
-        description: "Explicitly allow internet during task?"
-        required: false
-        default: "false"
-      instructions:
-        description: "Optional extra task instructions"
-        required: false
-        default: ""
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    branches: ["main", "release/*"]
 
 permissions:
-  contents: write
+  contents: read
+  actions: read
   pull-requests: write
 
 concurrency:
-  group: codex-autofix-${{ github.ref }}-${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || 'manual' }}
+  group: codex-autofix-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # === SSOT Tooling ===
-  NODE_VERSION: "18.19.1"
-  YARN_MAJOR_REQUIRED: "1"
-  # === Feature Flags (Repository → Settings → Variables) ===
-  CODEX_ENABLED: ${{ vars.CODEX_ENABLED || 'false' }}        # flip to 'true' to activate on CI failures
-  CODEX_DRIVER: ${{ github.event.inputs.driver || vars.CODEX_DRIVER || 'stub' }}
-  CODEX_ALLOW_INTERNET: ${{ github.event.inputs.allow_internet || vars.CODEX_ALLOW_INTERNET || 'false' }}
-  # Optional: path to your Router pipeline (TypeScript)
-  ROUTER_ENTRY_TS: ${{ vars.ROUTER_ENTRY_TS || 'router/src/pipelines/codexPipeline.ts' }}
-  # Optional: pre-canned autofix task (keeps this workflow vendor-agnostic)
-  CODEX_TASK_AT_IDS: ${{ vars.CODEX_TASK_AT_IDS || 'AT-CODEX-001' }}
-
 jobs:
-  gate:
-    name: Gate
-    runs-on: ubuntu-latest
-    outputs:
-      run_reason: ${{ steps.reason.outputs.msg }}
-      should_run: ${{ steps.should.outputs.ok }}
-      head_branch: ${{ steps.ctx.outputs.head_branch }}
-      head_sha: ${{ steps.ctx.outputs.head_sha }}
-    steps:
-      - id: reason
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "msg=manual" >> $GITHUB_OUTPUT
-          else
-            echo "msg=ci-failure" >> $GITHUB_OUTPUT
-          fi
-      - id: should
-        run: |
-          ok=false
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            ok=true
-          elif [ "${{ github.event.workflow_run.conclusion }}" = "failure" ] && [ "${{ env.CODEX_ENABLED }}" = "true" ]; then
-            ok=true
-          fi
-          echo "ok=$ok" >> $GITHUB_OUTPUT
-      - id: ctx
-        run: |
-          # Defaults for manual runs (work on default branch)
-          HB="${{ github.ref_name }}"
-          HS="${{ github.sha }}"
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            HB="${{ github.event.workflow_run.head_branch }}"
-            HS="${{ github.event.workflow_run.head_sha }}"
-          fi
-          echo "head_branch=$HB" >> $GITHUB_OUTPUT
-          echo "head_sha=$HS" >> $GITHUB_OUTPUT
-
   autofix:
-    name: Autofix
-    needs: gate
-    if: needs.gate.outputs.should_run == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Checkout target branch
+      - name: Checkout (full history for 3-way)
         uses: actions/checkout@v4
         with:
-          # For workflow_run: check out the failing branch; for manual: use current ref
-          ref: ${{ needs.gate.outputs.head_branch }}
           fetch-depth: 0
 
-      - name: Setup Node ${{ env.NODE_VERSION }}
+      - name: Git sanitize (quiet)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git --version || :
+          git config --global --add safe.directory "$GITHUB_WORKSPACE" || :
+          git config --global --add safe.directory "*" || :
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com" || :
+          git config --global user.name  "github-actions[bot]" || :
+          git rev-parse --is-inside-work-tree || :
+          git status --porcelain=v2 || :
+
+      - name: Setup Node (cache Yarn)
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: "yarn"
+          node-version: "18.19.1"
+          cache: yarn
 
-      - name: Enforce Yarn Classic (v1.x)
-        run: |
-          YV=$(yarn --version | cut -d. -f1)
-          if [ "$YV" != "${YARN_MAJOR_REQUIRED}" ]; then
-            echo "❌ Yarn must be v1.x (Classic). Found $(yarn --version)"
-            exit 1
-          fi
-          echo "✅ Yarn $(yarn --version)"
+      - name: Pin Yarn 1.22.22
+        run: corepack enable && yarn set version 1.22.22
 
-      - name: Install (frozen lockfile)
+      - name: Install deps (frozen)
         run: yarn install --frozen-lockfile
 
-      - name: Guard — AGENTS.md and PATCH-ONLY policy
-        run: |
-          if [ ! -f "AGENTS.md" ]; then
-            echo "❌ Missing AGENTS.md. Codex tasks must follow SSOT policy."
-            exit 1
-          fi
-          if ! grep -qi "PATCH-ONLY" AGENTS.md; then
-            echo "❌ AGENTS.md must contain PATCH-ONLY policy."
-            exit 1
-          fi
+      - name: Typecheck (non-blocking)
+        run: yarn -s typecheck
+        continue-on-error: true
 
-      - name: Create working branch
-        id: mkbranch
-        run: |
-          BR="chore/codex-autofix-${{ github.run_id }}"
-          git checkout -B "$BR"
-          echo "branch=$BR" >> $GITHUB_OUTPUT
-
-      - name: Prepare task prompt
-        id: prompt
-        run: |
-          mkdir -p .codex
-          cat > .codex/autofix.prompt <<'EOF'
-          Follow AGENTS.md (PATCH-ONLY; tests-first; deterministic).
-          Goal: Fix current CI failures with minimal changes.
-          Run: yarn install && yarn lint && yarn tsc --noEmit && yarn test --ci
-          Acceptance: All AT-IDs referenced must pass in CI.
-          EOF
-          # Append optional inputs
-          if [ -n "${{ github.event.inputs.instructions }}" ]; then
-            echo "" >> .codex/autofix.prompt
-            echo "Extra instructions:" >> .codex/autofix.prompt
-            echo "${{ github.event.inputs.instructions }}" >> .codex/autofix.prompt
-          fi
-
-      - name: Route to Codex (driver switch)
-        id: route
+      - name: Generate patch (Codex Autofix)
         env:
-          CODEX_DRIVER: ${{ env.CODEX_DRIVER }}
-          CODEX_ALLOW_INTERNET: ${{ env.CODEX_ALLOW_INTERNET }}
-          ROUTER_ENTRY_TS: ${{ env.ROUTER_ENTRY_TS }}
-          CODEX_TASK_AT_IDS: ${{ env.CODEX_TASK_AT_IDS }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: yarn codex:fix
+        continue-on-error: true
+
+      - name: Compute patch digest
+        if: always()
+        shell: bash
         run: |
-          echo "Driver: $CODEX_DRIVER  | Internet: $CODEX_ALLOW_INTERNET"
-          # --- stub driver: deterministic marker change (no external deps) ---
-          if [ "$CODEX_DRIVER" = "stub" ]; then
-            mkdir -p .codex
-            echo "# Codex STUB" > .codex/STUB_CHANGE.md
-            echo "ok=true" >> $GITHUB_OUTPUT
-            exit 0
+          if [[ -f "codex.patch" ]]; then
+            (shasum -a 256 codex.patch || sha256sum codex.patch) > codex.patch.sha256 || :
+          else
+            echo "codex.patch missing" > codex.patch.sha256
           fi
 
-          # --- cli driver: expect a 'codex' binary on PATH ---
-          if [ "$CODEX_DRIVER" = "cli" ]; then
-            if ! command -v codex >/dev/null 2>&1; then
-              echo "❌ 'codex' CLI not found on PATH."
-              echo "ok=false" >> $GITHUB_OUTPUT
-              exit 1
-            fi
-            # Example CLI usage — adjust flags to your CLI
-            codex --prompt-file .codex/autofix.prompt --repo "$GITHUB_WORKSPACE" --branch "${{ steps.mkbranch.outputs.branch }}" --patch-only $( [ "$CODEX_ALLOW_INTERNET" = "true" ] && echo "--allow-internet" )
-            echo "ok=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # --- api driver: call your Router pipeline (TypeScript) ---
-          if [ "$CODEX_DRIVER" = "api" ]; then
-            if [ ! -f "$ROUTER_ENTRY_TS" ]; then
-              echo "❌ Router entry not found: $ROUTER_ENTRY_TS"
-              echo "ok=false" >> $GITHUB_OUTPUT
-              exit 1
-            fi
-            npx ts-node -e "const {execute}=require('./${ROUTER_ENTRY_TS.replace(/\.ts$/,'')}');(async()=>{const r=await execute({type:'codex.task.v1',repoPath:process.cwd(),branch:'${{ steps.mkbranch.outputs.branch }}',atIds:'${CODEX_TASK_AT_IDS}'.split(','),instructions:require('fs').readFileSync('.codex/autofix.prompt','utf8'),allowInternet:${CODEX_ALLOW_INTERNET==='true'}});console.log(r);})().catch(e=>{console.error(e);process.exit(1);});"
-            echo "ok=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          echo "❌ Unknown driver: $CODEX_DRIVER"
-          echo "ok=false" >> $GITHUB_OUTPUT
-          exit 1
-
-      - name: Re-run CI locally to validate fix
-        if: steps.route.outputs.ok == 'true'
-        run: |
-          yarn lint
-          yarn typecheck
-          yarn test --runInBand
-
-      - name: Create Pull Request
-        if: success()
-        uses: peter-evans/create-pull-request@v6
-        with:
-          branch: ${{ steps.mkbranch.outputs.branch }}
-          title: "Codex Autofix: ${{ needs.gate.outputs.run_reason }} (${{
-            github.run_id }})"
-          body: |
-            Automated Codex autofix run.
-
-            - Driver: `${{ env.CODEX_DRIVER }}`
-            - Internet allowed: `${{ env.CODEX_ALLOW_INTERNET }}`
-            - Source: `${{ needs.gate.outputs.run_reason }}`
-            - AT IDs: `${{ env.CODEX_TASK_AT_IDS }}`
-            - Prompt: `.codex/autofix.prompt`
-
-            This PR follows **PATCH-ONLY** policy and was created by the Codex Autofix workflow.
-          labels: |
-            source=codex
-            codex:autofix
-          draft: false
-          delete-branch: false
-
-      - name: Upload Codex artifacts (prompt/logs)
+      - name: Upload patch artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: codex-autofix-${{ github.run_id }}
+          name: codex-patch
           path: |
-            .codex/
+            codex.patch
+            codex.patch.sha256
           if-no-files-found: warn
+
+      - name: Comment patch on PR
+        if: ${{ always() && github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const runId = process.env.GITHUB_RUN_ID;
+            const hasPatch = fs.existsSync('codex.patch');
+            const digest = fs.existsSync('codex.patch.sha256') ? fs.readFileSync('codex.patch.sha256','utf8') : '(no digest)';
+            const body = hasPatch
+              ? `### 🤖 Codex Autofix patch ready
+**Artifact:** \`codex-patch\`
+**Run ID:** \`${runId}\`
+
+**SHA-256:**
+\`\`\`
+${digest}
+\`\`\`
+**Apply locally:**
+\`\`\`powershell
+$rid='${runId}'
+mkdir .artifacts -ea 0
+gh run download $rid -n codex-patch -D .artifacts
+
+git apply --3way .artifacts/codex.patch 2>$null; if ($LASTEXITCODE -ne 0) { git apply .artifacts/codex.patch }
+\`\`\`
+`
+              : "Codex produced no patch (or the stub returned '# No changes').";
+            if (github.context.payload.pull_request) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body
+              });
+            }
