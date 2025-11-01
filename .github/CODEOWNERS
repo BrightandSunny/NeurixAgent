@@ -1,1 +1,3 @@
-*  @BrightandSunny
+# CODEOWNERS
+.github/workflows/codex-*.yml @BrightandSunny
+tools/codex-*.ts                 @BrightandSunny
