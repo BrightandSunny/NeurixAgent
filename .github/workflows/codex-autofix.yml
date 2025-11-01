@@ -20,18 +20,30 @@ concurrency:
 
 jobs:
   autofix:
+    # Only run on manual dispatch, or PRs carrying the 'codex' label
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'codex')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout (full history)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # Quiet intermittent git 128 and force https over ssh/git://
+      - name: Git sanitize (quiet)
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE" || true
+          git config --global url."https://".insteadOf git://
+          git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
+
       - name: Setup Node (cache Yarn)
         uses: actions/setup-node@v4
         with:
-          node-version: 18.19.1
+          node-version: "18.19.1"
           cache: yarn
 
       - name: Enable Corepack + pin Yarn 1.22.22
@@ -46,20 +58,22 @@ jobs:
         run: yarn -s typecheck
         continue-on-error: true
 
+      # Run even if OPENAI_API_KEY is missing; we'll still produce a patch artifact.
       - name: Generate patch (Codex Autofix)
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: yarn codex:fix
+        continue-on-error: true
+
+      - name: Ensure patch artifact exists
+        if: always()
+        run: |
+          test -f codex.patch || printf "# No changes\n" > codex.patch
 
       - name: Compute patch digest
         if: always()
-        shell: bash
         run: |
-          if [[ -f "codex.patch" ]]; then
-            (shasum -a 256 codex.patch || sha256sum codex.patch) > codex.patch.sha256 || :
-          else
-            echo "codex.patch missing" > codex.patch.sha256
-          fi
+          (shasum -a 256 codex.patch || sha256sum codex.patch) > codex.patch.sha256 || echo "sha256 unavailable" > codex.patch.sha256
 
       - name: Upload patch artifacts
         if: always()
@@ -79,12 +93,14 @@ jobs:
             const fs = require('fs');
             const runId = process.env.GITHUB_RUN_ID;
             const hasPatch = fs.existsSync('codex.patch');
-            const digest = fs.existsSync('codex.patch.sha256') ? fs.readFileSync('codex.patch.sha256','utf8').trim() : '(no digest)';
+            const digest = fs.existsSync('codex.patch.sha256')
+              ? fs.readFileSync('codex.patch.sha256','utf8').trim()
+              : '(no digest)';
             const lines = [];
             if (hasPatch) {
               lines.push("### Codex Autofix patch ready");
+              lines.push(`Run: https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId}`);
               lines.push("Artifact: **codex-patch**");
-              lines.push(`Run ID: ${runId}`);
               lines.push("");
               lines.push("SHA-256:");
               lines.push(digest);
@@ -95,7 +111,7 @@ jobs:
               lines.push("gh run download $rid -n codex-patch -D .artifacts");
               lines.push("git apply --3way .artifacts/codex.patch 2>$null; if ($LASTEXITCODE -ne 0) { git apply .artifacts/codex.patch }");
             } else {
-              lines.push("Codex produced no patch (or the stub emitted '# No changes').");
+              lines.push("Codex produced no patch (or a no-op '# No changes').");
             }
             await github.rest.issues.createComment({
               owner: context.repo.owner,
