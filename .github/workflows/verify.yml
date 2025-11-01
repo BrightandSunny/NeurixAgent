@@ -1,17 +1,52 @@
-name: Verify
+name: verify
+
 on:
   pull_request:
+    branches: [ "main", "release/**" ]
   push:
-    branches: [ main ]
+    branches: [ "*" ]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
         with:
-          node-version: '18.19.1'
-      - run: corepack enable
-      - run: yarn --version
-      - run: yarn install --frozen-lockfile
-      - run: yarn build || echo "No build step"
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Git sanitize (quiet)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git --version || :
+          git config --global --add safe.directory "$GITHUB_WORKSPACE" || :
+          git fetch --unshallow 2>/dev/null || git fetch --tags --prune --depth=0 || :
+          git status --porcelain=v2 || :
+
+      - name: Setup Node (cache Yarn)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18.19.1"
+          cache: yarn
+
+      - name: Pin Yarn 1.22.22
+        run: corepack enable && yarn set version 1.22.22
+
+      - name: Install deps (frozen)
+        run: yarn install --frozen-lockfile --network-timeout 600000
+
+      - name: Typecheck
+        run: yarn -s typecheck
+
+      - name: Tests (pass when none)
+        run: yarn test
